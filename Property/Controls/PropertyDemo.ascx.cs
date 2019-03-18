@@ -12,6 +12,7 @@ using System.Net;
 using System.IO;
 using System.Text;
 using System.Xml;
+using System.Data.SqlClient;
 
 namespace Property.Controls
 {
@@ -21,7 +22,7 @@ namespace Property.Controls
         cls_Property clsobj = new cls_Property();
         protected void Page_Load(object sender, EventArgs e)
         {
-           
+
             SiteSetting();
             Session["Municipality"] = null;
 
@@ -31,6 +32,22 @@ namespace Property.Controls
                 if (Session["PropertySearchType"].ToString().Contains("Residential"))
                 {
                     GetImages();
+                }
+                else if (Session["PropertySearchType"].ToString().Contains("Featured"))
+                {
+                    DataTable dt1 = GetImageByMLSID(Convert.ToString(Request.QueryString["MLSID"]));
+                    if (dt1.Rows.Count > 0)
+                    {
+                        rptImages.DataSource = dt1;
+                        rptImages.DataBind();
+                        sliderDiv.Visible = true;
+                        sliderImageEmpty.Visible = false;
+                    }
+                    else
+                    {
+                        sliderDiv.Visible = false;
+                        sliderImageEmpty.Visible = true;
+                    }
                 }
                 else if (Session["PropertySearchType"].ToString().Contains("Commercial"))
                 {
@@ -44,7 +61,10 @@ namespace Property.Controls
                 {
                     Response.Write("Invalid MLS#");
                 }
+
                 GetPropertyDetails();
+
+
             }
         }
         #endregion Page Load
@@ -154,7 +174,7 @@ namespace Property.Controls
                 {
                     lblemail.Text = Convert.ToString(dt.Rows[0]["Email"]);
                     //lblname.Text = Convert.ToString(dt1.Rows[0]["Firstname"]) + " " + Convert.ToString(dt1.Rows[0]["LastName"]);
-                   // lblmobile.Text = Convert.ToString(dt.Rows[0]["Mobile"]);
+                    // lblmobile.Text = Convert.ToString(dt.Rows[0]["Mobile"]);
                 }
             }
             catch (Exception ex)
@@ -167,32 +187,37 @@ namespace Property.Controls
         void GetImages()
         {
             Property1.MLSDataWebServiceSoapClient mlsClient = new Property1.MLSDataWebServiceSoapClient();
-            DataTable dt = mlsClient.GetImageByMLSID(Convert.ToString(Request.QueryString["MLSID"]));
-
-            if (dt.Rows.Count > 0)
+            if (Request.QueryString["MLSID"] != "W4382804")
             {
-                rptImages.DataSource = dt;
+                DataTable dt = mlsClient.GetImageByMLSID(Convert.ToString(Request.QueryString["MLSID"]));
+
+                if (dt.Rows.Count > 0)
+                {
+                    rptImages.DataSource = dt;
+                    rptImages.DataBind();
+                    sliderDiv.Visible = true;
+                    sliderImageEmpty.Visible = false;
+                }
+            }
+
+
+
+
+            DataTable dt1 = GetImageByMLSID(Convert.ToString(Request.QueryString["MLSID"]));
+            if (dt1.Rows.Count > 0)
+            {
+                rptImages.DataSource = dt1;
                 rptImages.DataBind();
                 sliderDiv.Visible = true;
                 sliderImageEmpty.Visible = false;
             }
             else
             {
-                DataTable dt1 = GetImageByMLSID(Convert.ToString(Request.QueryString["MLSID"]));
-                if (dt1.Rows.Count > 0)
-                {
-                    rptImages.DataSource = dt1;
-                    rptImages.DataBind();
-                    sliderDiv.Visible = true;
-                    sliderImageEmpty.Visible = false;
-                }
-                else
-                {
-                    sliderDiv.Visible = false;
-                    sliderImageEmpty.Visible = true;
-                }
-
+                sliderDiv.Visible = false;
+                sliderImageEmpty.Visible = true;
             }
+
+
 
             mlsClient = null;
         }
@@ -217,18 +242,18 @@ namespace Property.Controls
 
             //if (dtMLSImage.Rows[0]["VOX"].ToString().ToLower() == "false")
 
-            sourcePath = "C:\\MlsData\\Manual_IDXResidential\\";
+            sourcePath = "C:\\MlsData\\vikram\\";
             //else
             //    sourcePath = Server.MapPath("VoxResidential/");
 
             DirectoryInfo dir = new DirectoryInfo(sourcePath);
             //foreach (DataRow dr in dtMLSImage.Rows)
             //{
-            foreach (FileInfo files in dir.GetFiles("Photo" + MLSID_City_PostalCode + "*.*"))
+            foreach (FileInfo files in dir.GetFiles(MLSID_City_PostalCode + "*.*"))
             {
                 DataRow d = dtFiles.NewRow();
                 d[0] = MLSID_City_PostalCode;
-                d[1] = "http://webservices.only4agents.com/Manual_IDXResidential/" + files.Name;
+                d[1] = "http://webservices.only4agents.com/vikram/" + files.Name;
 
                 dtFiles.Rows.Add(d);
             }
@@ -245,6 +270,40 @@ namespace Property.Controls
                 pval1 = pValue;
             return pval1;
         }
+        public DataTable GetProperties_Condo_details()
+        {
+            DataTable dt = new DataTable();
+            try
+            {
+                SqlConnection conn = new SqlConnection(ConfigurationManager.ConnectionStrings["ConStr"].ConnectionString.ToString());
+                SqlCommand cmd = new SqlCommand();
+                SqlDataReader reader;
+                if (conn.State == ConnectionState.Closed)
+                {
+                    conn.Open();
+                }
+                cmd = conn.CreateCommand();
+                cmd.CommandText = "GetResidentialProperties_details";
+                cmd.CommandType = CommandType.StoredProcedure;
+                cmd.Parameters.AddWithValue("@MLSID_City_PostalCode", Convert.ToString(Request.QueryString["MLSID"]));
+                cmd.Parameters.AddWithValue("@MinPrice", "0");
+                cmd.Parameters.AddWithValue("@MaxPrice", "0");
+                cmd.Parameters.AddWithValue("@BedRooms", "0");
+                cmd.Parameters.AddWithValue("@BathRooms", "0");
+                cmd.Parameters.AddWithValue("@SaleLease", "0");
+                cmd.Parameters.AddWithValue("@SortPrice", "0");
+                cmd.Parameters.AddWithValue("@PropertyType", "0");
+
+                reader = cmd.ExecuteReader();
+                dt.Load(reader);
+                dt.TableName = "PageBlog";
+            }
+            catch (Exception ex)
+            {
+                throw ex;
+            }
+            return dt;
+        }
         void GetPropertyDetails()
         {
             try
@@ -256,6 +315,10 @@ namespace Property.Controls
                 {
                     dt = mlsClient.GetResidentialProperties(Convert.ToString(Request.QueryString["MLSID"]), "0", "0", "0", "0", "0", "0");
                 }
+                else if (Session["PropertySearchType"].ToString().Contains("Featured"))
+                {
+                    dt = GetProperties_Condo_details();
+                }
                 else if (Session["PropertySearchType"].ToString().Contains("Commercial"))
                 {
                     dt = mlsClient.GetAllCommercialProperties(Request.QueryString["MLSID"].ToString(), "0", "0", "0", "0", "0");
@@ -264,108 +327,225 @@ namespace Property.Controls
                 {
                     dt = mlsClient.GetProperties_Condo(Convert.ToString(Request.QueryString["MLSID"]), "0", "0", "0", "0", "0", "0");
                 }
+                if (Request.QueryString["MLSID"] != "W4382804")
+                {
 
-                lblListBrokerage.Text = "Listing Contracted with: " + Convert.ToString(dt.Rows[0]["ListBrokerage"]);
-                if ((Convert.ToString(dt.Rows[0]["PImage"])) == "images/no-image.gif")
-                {
-                    imgge.Visible = false;
-                    img.Visible = true;
-                }
-                imgge.ImageUrl = Convert.ToString(dt.Rows[0]["PImage"]);
 
-                lblPrice.Text = "$" + CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["ListPrice"]));
-                lblListPrice.Text = "$" + CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["ListPrice"]));
-                try
-                {
-                    lblStyle.Text = Convert.ToString(dt.Rows[0]["TypeOwn1Out"]) + " " + Convert.ToString(dt.Rows[0]["Style"]);
+                    lblListBrokerage.Text = "Listing Contracted with: " + Convert.ToString(dt.Rows[0]["ListBrokerage"]);
+                    if ((Convert.ToString(dt.Rows[0]["PImage"])) == "images/no-image.gif")
+                    {
+                        imgge.Visible = false;
+                        img.Visible = true;
+                    }
+                    imgge.ImageUrl = Convert.ToString(dt.Rows[0]["PImage"]);
+
+                    lblPrice.Text = "$" + CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["ListPrice"]));
+                    lblListPrice.Text = "$" + CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["ListPrice"]));
+                    try
+                    {
+                        lblStyle.Text = Convert.ToString(dt.Rows[0]["TypeOwn1Out"]) + " " + Convert.ToString(dt.Rows[0]["Style"]);
+                    }
+                    catch
+                    {
+                        lblStyle.Text = Convert.ToString(dt.Rows[0]["TypeOwn1Out"]) + " " + Convert.ToString(dt.Rows[0]["Category"]);
+                    }
+                    lblMLS.Text = Convert.ToString(dt.Rows[0]["MLS"]);
+                    string PostalCode = Convert.ToString(dt.Rows[0]["PostalCode"]);
+                    PostalCode = PostalCode.Insert(3, " ");
+                    Session["Address"] = (CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["address"])) + ", " + CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["Municipality"])) + ", " + CheckNullOrEmptyvalue(PostalCode));
+                    lblAddressBar1.Text = (CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["address"])) + ", " + CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["Municipality"])) + ", " + CheckNullOrEmptyvalue(PostalCode) + ", " + CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["province"])));
+                    lblPropertyDescription.Text = Convert.ToString(dt.Rows[0]["remarksforclients"]);
+                    string extras;
+                    if (dt.Rows[0]["extras"].ToString().Length > 5)
+                        extras = "<b style='float:left; width:80px;'>Extras :</b>" + "<div style='margin:0 0 0 96px;'>" + Convert.ToString(dt.Rows[0]["extras"]) + "</div>";
+                    else
+                        extras = "";
+
+                    lblCommunity.Text = Convert.ToString(dt.Rows[0]["Community"]);
+
+                    lblprovince.Text = CheckNullOrEmptyvalue(dt.Rows[0]["Municipality"].ToString());
+
+                    try
+                    {
+                        lblStorey.Text = CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["Style"]));
+                    }
+                    catch
+                    {
+                        lblStorey.Text = "";
+                    }
+
+                    lblSubTypeofhome.Text = CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["typeown1out"]));
+                    string frontONNsew = "";
+                    try
+                    {
+                        frontONNsew = CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["FrontingOnNSEW"]));
+                    }
+                    catch
+                    { }
+                    if (frontONNsew.ToString() == "E")
+                        lblfronting.Text = "<b>Fronting On: </b>" + "East";
+                    else if (frontONNsew.ToString() == "W")
+                        lblfronting.Text = "<b>Fronting On: </b>" + "West";
+                    else if (frontONNsew.ToString() == "N")
+                        lblfronting.Text = "<b>Fronting On: </b>" + "North";
+                    else if (frontONNsew.ToString() == "S")
+                        lblfronting.Text = "<b>Fronting On: </b>" + "South";
+                    try
+                    {
+                        lbltype.Text = Convert.ToString(dt.Rows[0]["TypeOwn1Out"]) + " " + Convert.ToString(dt.Rows[0]["Style"]);
+                    }
+                    catch
+                    {
+                        lbltype.Text = Convert.ToString(dt.Rows[0]["TypeOwn1Out"]);
+                    }
+                    lblgarage.Text = CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["GarageType"]));
+                    try
+                    {
+                        lblbasement122.Text = CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["Basement1"]));
+                        lblroom.Text = CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["Rooms"]));
+                        lblbed.Text = CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["Bedrooms"]));
+                        lblBedroom.Text = CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["Bedrooms"]));
+                        lblbath.Text = CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["Washrooms"]));
+                        lblWashRooms.Text = CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["Washrooms"]));
+                        lblDirCrossSt.Text = CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["DirectionsCrossStreets"]));
+                        lblAreaLabel.Text = "Area";
+                        // lblAreaLabel.Text = CheckNullOrEmptyvalue(dt.Rows[0]["areacode"].ToString());
+                        lblAreaValue.Text = CheckNullOrEmptyvalue(dt.Rows[0]["area"].ToString());
+                        lblKitchen.Text = CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["Kitchens"])) + "+" + CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["KitchensPlus"]));
+                        lblfamilyrm.Text = CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["FamilyRoom"]));
+                        lblExterior.Text = CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["Exterior1"]));
+
+                    }
+                    catch
+                    {
+                        lblbasement122.Text = CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["Basement1"]));
+                        lblAreaLabel.Text = "Office Area";
+                        lblAreaValue.Text = CheckNullOrEmptyvalue(dt.Rows[0]["OfficeAptarea"].ToString()) + " " + CheckNullOrEmptyvalue(dt.Rows[0]["officeaptareacode"].ToString());
+                        lblBedLabel.Text = "Total Area";
+                        lblbed.Text = CheckNullOrEmptyvalue(dt.Rows[0]["totalarea"].ToString()) + " " + CheckNullOrEmptyvalue(dt.Rows[0]["totalareacode"].ToString());
+                        lblBathLabel.Text = "Water";
+                        lblbath.Text = CheckNullOrEmptyvalue(dt.Rows[0]["Water"].ToString());
+                    }
+
+                    lblMLS1.Text = CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["MLS"]));
+                    lbltx.Text = dt.Rows[0]["TotalTaxes"].ToString();
+                    lblBasement.Text = CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["Basement1"]));
+                    lblGarageType.Text = CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["GarageType"]));
+                    lblParking.Text = CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["ParkingSpaces"]));
                 }
-                catch
-                {
-                    lblStyle.Text = Convert.ToString(dt.Rows[0]["TypeOwn1Out"]) + " " + Convert.ToString(dt.Rows[0]["Category"]);
-                }
-                lblMLS.Text = Convert.ToString(dt.Rows[0]["MLS"]);
-                string PostalCode = Convert.ToString(dt.Rows[0]["PostalCode"]);
-                PostalCode = PostalCode.Insert(3, " ");
-                Session["Address"] = (CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["address"])) + ", " + CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["Municipality"])) + ", " + CheckNullOrEmptyvalue(PostalCode));
-                lblAddressBar1.Text = (CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["address"])) + ", " + CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["Municipality"])) + ", " + CheckNullOrEmptyvalue(PostalCode) + ", " + CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["province"])));
-                lblPropertyDescription.Text = Convert.ToString(dt.Rows[0]["remarksforclients"]);
-                string extras;
-                if (dt.Rows[0]["extras"].ToString().Length > 5)
-                    extras = "<b style='float:left; width:80px;'>Extras :</b>" + "<div style='margin:0 0 0 96px;'>" + Convert.ToString(dt.Rows[0]["extras"]) + "</div>";
+
                 else
-                    extras = "";
+                {
 
-                lblCommunity.Text = Convert.ToString(dt.Rows[0]["Community"]);
+                    lblListBrokerage.Text = "";// "Listing Contracted with: " + Convert.ToString(dt.Rows[0]["ListBrokerage"]);
+                    //if ((Convert.ToString(dt.Rows[0]["PImage"])) == "images/no-image.gif")
+                    //{
+                    //    imgge.Visible = false;
+                    //    img.Visible = true;
+                    //}
+                    //imgge.ImageUrl = Convert.ToString(dt.Rows[0]["PImage"]);
 
-                lblprovince.Text = CheckNullOrEmptyvalue(dt.Rows[0]["Municipality"].ToString());
+                    lblPrice.Text = "$" + "674,000";// CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["ListPrice"]));
+                    lblListPrice.Text = "$" + "674,000";// CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["ListPrice"]));
+                    try
+                    {
+                        lblStyle.Text = "Semi-Detached";// Convert.ToString(dt.Rows[0]["TypeOwn1Out"]) + " " + Convert.ToString(dt.Rows[0]["Style"]);
+                    }
+                    catch
+                    {
+                        lblStyle.Text = Convert.ToString(dt.Rows[0]["TypeOwn1Out"]) + " " + Convert.ToString(dt.Rows[0]["Category"]);
+                    }
+                    lblMLS.Text = "W4382804";// Convert.ToString(dt.Rows[0]["MLS"]);
+                    //string PostalCode = Convert.ToString(dt.Rows[0]["PostalCode"]);
+                    //PostalCode = PostalCode.Insert(3, " ");
 
-                try
-                {
-                    lblStorey.Text = CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["Style"]));
-                }
-                catch
-                {
-                    lblStorey.Text = "";
-                }
+                    Session["Address"] = "67 CADILLAC CRES BRAMPTON, ONTARIO, CANADA, L7A3B6";
+                    lblAddressBar1.Text = "67 CADILLAC CRES BRAMPTON, ONTARIO, CANADA, L7A3B6";
+                    lblPropertyDescription.Text = "Absolutely Stunning 3 Br Semi-Detached House With Lots Of Upgardes! Grand Double Door Entry Leads To Open Foyer! Immaculate & Modern Open Concept Kitchen With Granite Countertop & S/S Appliances.Sun Filled & Bright Living Room With Fireplace! Large Master Br With W/I Closet.2 Good Size Br With Large Windows.Finished Bsmt With Sep Entrance!Friendly Neighborhood, Walking Distance To Park/Plaza/Bus Stops & Other Amenities.Not To Miss Opportunity.";
+                    string extras;
+                    //if (dt.Rows[0]["extras"].ToString().Length > 5)
+                    //    extras = "<b style='float:left; width:80px;'>Extras :</b>" + "<div style='margin:0 0 0 96px;'>" + Convert.ToString(dt.Rows[0]["extras"]) + "</div>";
+                    //else
+                    //    extras = "";
 
-                lblSubTypeofhome.Text = CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["typeown1out"]));
-                string frontONNsew = "";
-                try
-                {
-                    frontONNsew = CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["FrontingOnNSEW"]));
-                }
-                catch
-                { }
-                if (frontONNsew.ToString() == "E")
-                    lblfronting.Text = "<b>Fronting On: </b>" + "East";
-                else if (frontONNsew.ToString() == "W")
-                    lblfronting.Text = "<b>Fronting On: </b>" + "West";
-                else if (frontONNsew.ToString() == "N")
-                    lblfronting.Text = "<b>Fronting On: </b>" + "North";
-                else if (frontONNsew.ToString() == "S")
-                    lblfronting.Text = "<b>Fronting On: </b>" + "South";
-                try
-                {
-                    lbltype.Text = Convert.ToString(dt.Rows[0]["TypeOwn1Out"]) + " " + Convert.ToString(dt.Rows[0]["Style"]);
-                }
-                catch
-                {
-                    lbltype.Text = Convert.ToString(dt.Rows[0]["TypeOwn1Out"]);
-                }
-                lblgarage.Text = CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["GarageType"]));
-                try
-                {
-                    lblbasement122.Text = CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["Basement1"]));
-                    lblroom.Text = CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["Rooms"]));
-                    lblbed.Text = CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["Bedrooms"]));
-                    lblBedroom.Text = CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["Bedrooms"]));
-                    lblbath.Text = CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["Washrooms"]));
-                    lblWashRooms.Text = CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["Washrooms"]));
-                    lblDirCrossSt.Text = CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["DirectionsCrossStreets"]));
-                    lblAreaLabel.Text = "Area";
-                    // lblAreaLabel.Text = CheckNullOrEmptyvalue(dt.Rows[0]["areacode"].ToString());
-                    lblAreaValue.Text = CheckNullOrEmptyvalue(dt.Rows[0]["area"].ToString());
-                    lblKitchen.Text = CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["Kitchens"])) + "+" + CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["KitchensPlus"]));
-                    lblfamilyrm.Text = CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["FamilyRoom"]));
-                    lblExterior.Text = CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["Exterior1"]));
+                    //lblCommunity.Text = Convert.ToString(dt.Rows[0]["Community"]);
 
-                }
-                catch
-                {
-                    lblbasement122.Text = CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["Basement1"]));
-                    lblAreaLabel.Text = "Office Area";
-                    lblAreaValue.Text = CheckNullOrEmptyvalue(dt.Rows[0]["OfficeAptarea"].ToString()) + " " + CheckNullOrEmptyvalue(dt.Rows[0]["officeaptareacode"].ToString());
-                    lblBedLabel.Text = "Total Area";
-                    lblbed.Text = CheckNullOrEmptyvalue(dt.Rows[0]["totalarea"].ToString()) + " " + CheckNullOrEmptyvalue(dt.Rows[0]["totalareacode"].ToString());
-                    lblBathLabel.Text = "Water";
-                    lblbath.Text = CheckNullOrEmptyvalue(dt.Rows[0]["Water"].ToString());
-                }
+                    //lblprovince.Text = CheckNullOrEmptyvalue(dt.Rows[0]["Municipality"].ToString());
 
-                lblMLS1.Text = CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["MLS"]));
-                lbltx.Text = dt.Rows[0]["TotalTaxes"].ToString();
-                lblBasement.Text = CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["Basement1"]));
-                lblGarageType.Text = CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["GarageType"]));
-                lblParking.Text = CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["ParkingSpaces"]));
+                    //try
+                    //{
+                    //    lblStorey.Text = CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["Style"]));
+                    //}
+                    //catch
+                    //{
+                    //    lblStorey.Text = "";
+                    //}
+
+                    //lblSubTypeofhome.Text = CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["typeown1out"]));
+                    string frontONNsew = "";
+                    //try
+                    //{
+                    //    frontONNsew = CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["FrontingOnNSEW"]));
+                    //}
+                    //catch
+                    //{ }
+                    //if (frontONNsew.ToString() == "E")
+                    //    lblfronting.Text = "<b>Fronting On: </b>" + "East";
+                    //else if (frontONNsew.ToString() == "W")
+                    //    lblfronting.Text = "<b>Fronting On: </b>" + "West";
+                    //else if (frontONNsew.ToString() == "N")
+                    //    lblfronting.Text = "<b>Fronting On: </b>" + "North";
+                    //else if (frontONNsew.ToString() == "S")
+                    //    lblfronting.Text = "<b>Fronting On: </b>" + "South";
+                    try
+                    {
+                        lbltype.Text = "Semi-Detached";// Convert.ToString(dt.Rows[0]["TypeOwn1Out"]) + " " + Convert.ToString(dt.Rows[0]["Style"]);
+                    }
+                    catch
+                    {
+                        lbltype.Text = Convert.ToString(dt.Rows[0]["TypeOwn1Out"]);
+                    }
+                    lblgarage.Text = "1";// CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["GarageType"]));
+                    try
+                    {
+                        //lblbasement122.Text = CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["Basement1"]));
+                        //lblroom.Text = CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["Rooms"]));
+                        lblbed.Text = "3";// CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["Bedrooms"]));
+                        lblBedroom.Text = "3";// CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["Bedrooms"]));
+                        lblbath.Text = "4";// CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["Washrooms"]));
+                        lblWashRooms.Text = "4";// CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["Washrooms"]));
+                       // lblDirCrossSt.Text = CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["DirectionsCrossStreets"]));
+                        lblAreaLabel.Text = "Area";
+                        // lblAreaLabel.Text = CheckNullOrEmptyvalue(dt.Rows[0]["areacode"].ToString());
+                        //    lblAreaValue.Text = CheckNullOrEmptyvalue(dt.Rows[0]["area"].ToString());
+                        //    lblKitchen.Text = CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["Kitchens"])) + "+" + CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["KitchensPlus"]));
+                        //    lblfamilyrm.Text = CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["FamilyRoom"]));
+                        //    lblExterior.Text = CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["Exterior1"]));
+
+                        //}
+                        //catch
+                        //{
+                        //    lblbasement122.Text = CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["Basement1"]));
+                        //    lblAreaLabel.Text = "Office Area";
+                        //    lblAreaValue.Text = CheckNullOrEmptyvalue(dt.Rows[0]["OfficeAptarea"].ToString()) + " " + CheckNullOrEmptyvalue(dt.Rows[0]["officeaptareacode"].ToString());
+                        //    lblBedLabel.Text = "Total Area";
+                        //    lblbed.Text = CheckNullOrEmptyvalue(dt.Rows[0]["totalarea"].ToString()) + " " + CheckNullOrEmptyvalue(dt.Rows[0]["totalareacode"].ToString());
+                        //    lblBathLabel.Text = "Water";
+                        //    lblbath.Text = CheckNullOrEmptyvalue(dt.Rows[0]["Water"].ToString());
+                        //}
+
+                        //lblMLS1.Text = CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["MLS"]));
+                        //lbltx.Text = dt.Rows[0]["TotalTaxes"].ToString();
+                        //lblBasement.Text = CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["Basement1"]));
+                        //lblGarageType.Text = CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["GarageType"]));
+                        //lblParking.Text = CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["ParkingSpaces"]));
+
+                    }
+                    catch
+                    {
+
+                    }
+                    }
 
                 Adress adrs = new Adress();
                 adrs.Address = lblAddressBar1.Text;
@@ -397,33 +577,33 @@ namespace Property.Controls
                 }
                 Response.Write(sb);
 
-                int NoOfRoom = Convert.ToInt32("0" + lblroom.Text);
-                DataTable dtRooms = new DataTable();
-                dtRooms.Columns.Add("Room", typeof(string));
-                dtRooms.Columns.Add("Level", typeof(string));
-                dtRooms.Columns.Add("RoomDim", typeof(string));
-                dtRooms.Columns.Add("RoomDesc", typeof(string));
+                ////int NoOfRoom = Convert.ToInt32("0" + lblroom.Text);
+                ////DataTable dtRooms = new DataTable();
+                ////dtRooms.Columns.Add("Room", typeof(string));
+                ////dtRooms.Columns.Add("Level", typeof(string));
+                ////dtRooms.Columns.Add("RoomDim", typeof(string));
+                ////dtRooms.Columns.Add("RoomDesc", typeof(string));
 
-                for (int i = 0; i < NoOfRoom; i++)
-                {
-                    int RowIndex = i + 1;
-                    string vRoom = CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["Room" + RowIndex + ""]));
-                    string vLevel = CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["Level" + RowIndex + ""])) != "" ? Convert.ToString(dt.Rows[0]["Level" + RowIndex + ""]) : "0";
-                    string vRoomDim = (CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["Room" + RowIndex + "Length"])) != "" ? (Convert.ToString(dt.Rows[0]["Room" + RowIndex + "Length"])) : "0") + CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["Room" + RowIndex + "Width"]) != "" ? ("x" + Convert.ToString(dt.Rows[0]["Room" + RowIndex + "Width"])) : "");// Convert.ToString(dt.Rows[0]["Room1Length"]) + "x" + Convert.ToString(dt.Rows[0]["Room1Width"]);
-                    string vRoomDesc = (CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["Room" + RowIndex + "Desc1"])) != "" ? (Convert.ToString(dt.Rows[0]["Room" + RowIndex + "Desc1"])) : "----") + CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["Room" + RowIndex + "Desc2"]) != "" ? ("," + Convert.ToString(dt.Rows[0]["Room" + RowIndex + "Desc2"])) : "");
+                ////for (int i = 0; i < NoOfRoom; i++)
+                ////{
+                ////    int RowIndex = i + 1;
+                ////    string vRoom = CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["Room" + RowIndex + ""]));
+                ////    string vLevel = CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["Level" + RowIndex + ""])) != "" ? Convert.ToString(dt.Rows[0]["Level" + RowIndex + ""]) : "0";
+                ////    string vRoomDim = (CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["Room" + RowIndex + "Length"])) != "" ? (Convert.ToString(dt.Rows[0]["Room" + RowIndex + "Length"])) : "0") + CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["Room" + RowIndex + "Width"]) != "" ? ("x" + Convert.ToString(dt.Rows[0]["Room" + RowIndex + "Width"])) : "");// Convert.ToString(dt.Rows[0]["Room1Length"]) + "x" + Convert.ToString(dt.Rows[0]["Room1Width"]);
+                ////    string vRoomDesc = (CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["Room" + RowIndex + "Desc1"])) != "" ? (Convert.ToString(dt.Rows[0]["Room" + RowIndex + "Desc1"])) : "----") + CheckNullOrEmptyvalue(Convert.ToString(dt.Rows[0]["Room" + RowIndex + "Desc2"]) != "" ? ("," + Convert.ToString(dt.Rows[0]["Room" + RowIndex + "Desc2"])) : "");
 
-                    DataRow dr = dtRooms.NewRow();
-                    dr["Room"] = vRoom;
-                    dr["Level"] = vLevel;
-                    dr["RoomDim"] = vRoomDim;
-                    dr["RoomDesc"] = vRoomDesc;
-                    dtRooms.Rows.Add(dr);
-                    LVroom.DataSource = dtRooms;
-                    LVroom.DataBind();
-                }
+                ////    DataRow dr = dtRooms.NewRow();
+                ////    dr["Room"] = vRoom;
+                ////    dr["Level"] = vLevel;
+                ////    dr["RoomDim"] = vRoomDim;
+                ////    dr["RoomDesc"] = vRoomDesc;
+                ////    dtRooms.Rows.Add(dr);
+                ////    LVroom.DataSource = dtRooms;
+                ////    LVroom.DataBind();
+                ////}
 
 
-            
+
             }
             catch (Exception ex)
             { }
@@ -606,8 +786,8 @@ namespace Property.Controls
 
         }
 
-         
 
-        
+
+
     }
 }
